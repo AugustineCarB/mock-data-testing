@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { createChart, ColorType } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries, LineSeries } from 'lightweight-charts';
 
 export default function CandlestickChart({ data, name }) {
   const containerRef = useRef(null);
@@ -36,8 +36,8 @@ export default function CandlestickChart({ data, name }) {
 
     chartRef.current = chart;
 
-    // Format data for candlestick
-    const ohlcData = data
+    // Format data for candlestick – deduplicate by time
+    const ohlcRaw = data
       .filter(d => d.open != null && d.high != null && d.low != null && d.close != null)
       .map(d => ({
         time: d.timestamp?.substring(0, 10),
@@ -45,10 +45,15 @@ export default function CandlestickChart({ data, name }) {
         high: Number(d.high),
         low: Number(d.low),
         close: Number(d.close),
-      }));
+      }))
+      .filter(d => d.time);
+    const ohlcMap = new Map();
+    for (const d of ohlcRaw) ohlcMap.set(d.time, d);
+    const ohlcData = Array.from(ohlcMap.values()).sort((a, b) => a.time.localeCompare(b.time));
 
     if (ohlcData.length > 0) {
-      const candleSeries = chart.addCandlestickSeries({
+      // v5 API: chart.addSeries(CandlestickSeries, options)
+      const candleSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#00d4aa',
         downColor: '#ff4976',
         borderDownColor: '#ff4976',
@@ -58,16 +63,21 @@ export default function CandlestickChart({ data, name }) {
       });
       candleSeries.setData(ohlcData);
     } else {
-      // Fall back to line chart if no OHLC
-      const lineData = data
+      // Fall back to line chart if no OHLC – deduplicate by time
+      const lineRaw = data
         .filter(d => d.value != null || d.close != null)
         .map(d => ({
           time: d.timestamp?.substring(0, 10),
           value: Number(d.value ?? d.close),
-        }));
+        }))
+        .filter(d => d.time && !isNaN(d.value));
+      const lineMap = new Map();
+      for (const d of lineRaw) lineMap.set(d.time, d);
+      const lineData = Array.from(lineMap.values()).sort((a, b) => a.time.localeCompare(b.time));
 
       if (lineData.length > 0) {
-        const lineSeries = chart.addLineSeries({
+        // v5 API: chart.addSeries(LineSeries, options)
+        const lineSeries = chart.addSeries(LineSeries, {
           color: '#00d4aa',
           lineWidth: 2,
         });

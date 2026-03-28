@@ -2,6 +2,7 @@ import { useMarketData } from '../hooks/useMarketData';
 import { intradayIds } from '../config/instruments';
 import CandlestickChart from './CandlestickChart';
 import LineChart from './LineChart';
+import ErrorBoundary from './ErrorBoundary';
 
 function formatValue(val) {
   if (val == null) return '—';
@@ -66,9 +67,13 @@ export default function ChartCard({ instrument }) {
             <small>Run the data-center pipeline to populate.</small>
           </div>
         ) : isCandle ? (
-          <CandlestickChart data={data} name={instrument.name} />
+          <ErrorBoundary>
+            <CandlestickChart data={data} name={instrument.name} />
+          </ErrorBoundary>
         ) : (
-          <LineChart data={data} name={instrument.name} />
+          <ErrorBoundary>
+            <LineChart data={data} name={instrument.name} />
+          </ErrorBoundary>
         )}
       </div>
     </div>

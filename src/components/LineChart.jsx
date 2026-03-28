@@ -1,22 +1,76 @@
-import {
-  ResponsiveContainer,
-  LineChart as ReLineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
+import { useEffect, useRef } from 'react';
+import { createChart, ColorType, LineSeries } from 'lightweight-charts';
 
 export default function LineChart({ data, name }) {
-  const chartData = data
-    .filter(d => d.value != null || d.close != null)
-    .map(d => ({
-      date: d.timestamp?.substring(0, 10),
-      value: Number(d.value ?? d.close),
-    }));
+  const containerRef = useRef(null);
+  const chartRef = useRef(null);
 
-  if (chartData.length === 0) {
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+    }
+
+    const rawData = data
+      .filter(d => d.value != null || d.close != null)
+      .map(d => ({
+        time: d.timestamp?.substring(0, 10),
+        value: Number(d.value ?? d.close),
+      }))
+      .filter(d => !isNaN(d.value) && d.time);
+
+    // Deduplicate by time (keep last occurrence) and sort ascending
+    const timeMap = new Map();
+    for (const d of rawData) timeMap.set(d.time, d);
+    const chartData = Array.from(timeMap.values()).sort((a, b) => a.time.localeCompare(b.time));
+
+    if (chartData.length === 0) return;
+
+    const chart = createChart(containerRef.current, {
+      width: containerRef.current.clientWidth,
+      height: 260,
+      layout: {
+        background: { type: ColorType.Solid, color: '#1a1a2e' },
+        textColor: '#a0a0b0',
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: '#2a2a3e' },
+        horzLines: { color: '#2a2a3e' },
+      },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderColor: '#2a2a3e' },
+      timeScale: { borderColor: '#2a2a3e' },
+    });
+
+    chartRef.current = chart;
+
+    const lineSeries = chart.addSeries(LineSeries, {
+      color: '#00d4aa',
+      lineWidth: 2,
+    });
+    lineSeries.setData(chartData);
+    chart.timeScale().fitContent();
+
+    const handleResize = () => {
+      if (containerRef.current) {
+        chart.applyOptions({ width: containerRef.current.clientWidth });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+      chartRef.current = null;
+    };
+  }, [data]);
+
+  const hasData = data.some(d => d.value != null || d.close != null);
+
+  if (!hasData) {
     return (
       <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
         No data available
@@ -24,44 +78,5 @@ export default function LineChart({ data, name }) {
     );
   }
 
-  // Show ~6 ticks on X axis
-  const tickInterval = Math.max(1, Math.floor(chartData.length / 6));
-
-  return (
-    <ResponsiveContainer width="100%" height={260}>
-      <ReLineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3e" />
-        <XAxis
-          dataKey="date"
-          tick={{ fill: '#a0a0b0', fontSize: 10 }}
-          interval={tickInterval}
-          tickLine={false}
-        />
-        <YAxis
-          tick={{ fill: '#a0a0b0', fontSize: 10 }}
-          tickLine={false}
-          domain={['auto', 'auto']}
-          width={60}
-        />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#1a1a2e',
-            border: '1px solid #3a3a5e',
-            borderRadius: 6,
-            color: '#e0e0f0',
-            fontSize: 12,
-          }}
-          labelStyle={{ color: '#a0a0b0' }}
-        />
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke="#00d4aa"
-          strokeWidth={2}
-          dot={false}
-          name={name}
-        />
-      </ReLineChart>
-    </ResponsiveContainer>
-  );
+  return <div ref={containerRef} style={{ width: '100%', minHeight: 260 }} />;
 }
